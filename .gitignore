@@ -18,3 +18,8 @@ exam_progress.json
 
 # Old version backups
 *old-ver*
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
