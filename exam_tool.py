@@ -1,9 +1,19 @@
+import calendar
 import json
 import os
 import time
+import ctypes
 import tkinter as tk
 from datetime import datetime, date, timedelta
 from tkinter import messagebox, simpledialog
+
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "exam_progress.json")
@@ -58,11 +68,18 @@ class ExamPrepApp:
     def __init__(self, root):
         self.root = root
         self.root.title("國營企管衝刺管理工具")
-        self.root.geometry("520x740")
-        self.root.minsize(480, 640)
         self.root.configure(bg="#f1f5f9")
         self.root.attributes("-topmost", True)
-        self.root.overrideredirect(True)
+        self.root.resizable(True, True)
+
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        window_width = min(520, screen_width - 40)
+        window_height = min(740, screen_height - 80)
+        x = max(0, (screen_width - window_width) // 2)
+        y = max(0, (screen_height - window_height) // 2)
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        self.root.minsize(min(480, window_width), min(640, window_height))
 
         self.drag_offset_x = 0
         self.drag_offset_y = 0
@@ -112,13 +129,36 @@ class ExamPrepApp:
         self.done_fg     = t["done_fg"]
         self.input_bg    = t["input_bg"]
         self._theme_name = theme_name
-        self.font_ui  = ("Microsoft JhengHei UI", 10)
-        self.font_sm  = ("Microsoft JhengHei UI", 9)
-        self.font_md  = ("Microsoft JhengHei UI", 11)
-        self.font_lg  = ("Microsoft JhengHei UI", 13, "bold")
-        self.font_xl  = ("Microsoft JhengHei UI", 24, "bold")
+        self.define_fonts()
         self.root.configure(bg=self.bg)
+
+    def define_fonts(self):
+        scale = self.data.get("settings", {}).get("ui_scale", 100)
+        scale = max(60, min(200, int(scale)))
+        factor = scale / 100
+        self.font_ui  = ("Microsoft JhengHei UI", max(8, int(10 * factor)))
+        self.font_sm  = ("Microsoft JhengHei UI", max(8, int(9 * factor)))
+        self.font_md  = ("Microsoft JhengHei UI", max(8, int(11 * factor)))
+        self.font_lg  = ("Microsoft JhengHei UI", max(10, int(13 * factor)), "bold")
+        self.font_xl  = ("Microsoft JhengHei UI", max(16, int(24 * factor)), "bold")
         self.root.option_add("*Font", self.font_ui)
+        try:
+            self.root.tk.call("tk", "scaling", factor)
+        except Exception:
+            pass
+
+    def rebuild_ui(self):
+        prev_tab = getattr(self, "active_tab", "todo")
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.tab_frames = {}
+        self._editing_todo_id = None
+        self._noting_todo_id = None
+        self.define_colors()
+        self.build_ui()
+        self.bind_window_events()
+        self.switch_tab(prev_tab)
+        self.refresh_all()
 
     # ── theme switch ──────────────────────────────────────────────────────────
     def switch_theme(self, theme_name):
@@ -126,17 +166,7 @@ class ExamPrepApp:
             return
         self.data["settings"]["theme"] = theme_name
         self.save_data()
-        prev_tab = getattr(self, "active_tab", "todo")
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        self.tab_frames = {}
-        self._editing_todo_id = None
-        self._noting_todo_id  = None
-        self.define_colors()
-        self.build_ui()
-        self.bind_window_events()
-        self.switch_tab(prev_tab)
-        self.refresh_all()
+        self.rebuild_ui()
 
     # ── build UI ──────────────────────────────────────────────────────────────
     def build_ui(self):
@@ -191,6 +221,15 @@ class ExamPrepApp:
         ).pack(side="right")
 
         tk.Button(
+            right, text="設定", command=self.open_display_settings,
+            bg="#1e293b", fg="#94a3b8",
+            bd=0, relief="flat", font=self.font_sm,
+            padx=12, pady=6, cursor="hand2",
+            highlightthickness=0,
+            activebackground="#334155", activeforeground="#f8fafc",
+        ).pack(side="right", padx=(0, 8))
+
+        tk.Button(
             right, text="儲存", command=self.save_data,
             bg="#1e293b", fg="#94a3b8",
             bd=0, relief="flat", font=self.font_sm,
@@ -218,6 +257,62 @@ class ExamPrepApp:
                 activebackground=info["_dot"], activeforeground="white",
             )
             dot.pack(side="left", padx=1)
+
+    def open_display_settings(self):
+        win = tk.Toplevel(self.root)
+        win.title("顯示設定")
+        win.configure(bg=self.bg)
+        win.geometry("320x220")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+
+        tk.Label(win, text="介面縮放 (%)", fg=self.text, bg=self.bg, font=self.font_md).pack(pady=(18, 6))
+
+        scale_var = tk.IntVar(value=self.data["settings"].get("ui_scale", 100))
+        scale_frame = tk.Frame(win, bg=self.bg)
+        scale_frame.pack(pady=(0, 14))
+
+        scale_entry = tk.Entry(
+            scale_frame, textvariable=scale_var, width=6,
+            font=self.font_ui, bd=0, relief="flat",
+            highlightthickness=1, highlightcolor=self.accent, highlightbackground=self.border,
+            bg=self.input_bg, fg=self.text, insertbackground=self.text,
+        )
+        scale_entry.pack(side="left", padx=(0, 8))
+
+        tk.Label(win, text="60 - 200", fg=self.muted, bg=self.bg, font=self.font_sm).pack()
+
+        btn_frame = tk.Frame(win, bg=self.bg)
+        btn_frame.pack(fill="x", padx=16, pady=(16, 0))
+
+        def apply_scale():
+            val = scale_var.get()
+            if val < 60 or val > 200:
+                messagebox.showwarning("輸入錯誤", "請輸入 60 到 200 之間的數值。", parent=win)
+                return
+            self.data["settings"]["ui_scale"] = val
+            self.define_fonts()
+            self.rebuild_ui()
+            self.save_data()
+            win.destroy()
+
+        tk.Button(
+            btn_frame, text="套用", command=apply_scale,
+            bg=self.accent, fg="white",
+            bd=0, relief="flat", font=self.font_sm,
+            padx=12, pady=6, cursor="hand2",
+            highlightthickness=0,
+            activebackground=self.accent_lt, activeforeground="white",
+        ).pack(side="left")
+
+        tk.Button(
+            btn_frame, text="取消", command=win.destroy,
+            bg=self.border, fg=self.text,
+            bd=0, relief="flat", font=self.font_sm,
+            padx=12, pady=6, cursor="hand2",
+            highlightthickness=0,
+            activebackground=self.card, activeforeground=self.text,
+        ).pack(side="right")
 
     # ── countdown strip ───────────────────────────────────────────────────────
     def build_countdown_strip(self):
@@ -908,8 +1003,13 @@ class ExamPrepApp:
         self._switch_view_date(self.today_key)
 
     def _open_cal_picker(self):
-        from tkcalendar import Calendar
         cur = date.fromisoformat(self.view_date_key)
+        try:
+            from tkcalendar import Calendar
+        except ModuleNotFoundError:
+            self._open_simple_date_picker(cur)
+            return
+
         top = tk.Toplevel(self.root)
         top.title("選擇日期")
         top.resizable(False, False)
@@ -943,6 +1043,79 @@ class ExamPrepApp:
                 self._switch_view_date(selected)
 
         cal.bind("<<CalendarSelected>>", lambda _: confirm())
+        self._btn(btn_row, "確定", confirm, self.accent, "white").pack(side="left")
+        self._btn(btn_row, "取消", top.destroy, self.bg, self.muted, border=True).pack(side="left", padx=(8, 0))
+
+    def _open_simple_date_picker(self, cur):
+        top = tk.Toplevel(self.root)
+        top.title("選擇日期")
+        top.resizable(False, False)
+        top.configure(bg=self.bg)
+        top.attributes("-topmost", True)
+        top.grab_set()
+        top.focus_force()
+        top.geometry(f"+{self.root.winfo_x() + 20}+{self.root.winfo_y() + 80}")
+
+        year_var = tk.StringVar(value=str(cur.year))
+        month_var = tk.StringVar(value=f"{cur.month:02d}")
+        day_var = tk.StringVar(value=f"{cur.day:02d}")
+
+        form = tk.Frame(top, bg=self.bg)
+        form.pack(padx=16, pady=(14, 8))
+
+        tk.Label(form, text="年", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
+        year_box = tk.Spinbox(
+            form, from_=2000, to=2100, textvariable=year_var,
+            width=6, font=self.font_ui, justify="center",
+        )
+        year_box.pack(fill="x", pady=(2, 8))
+
+        tk.Label(form, text="月", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
+        month_box = tk.Spinbox(
+            form, values=[f"{i:02d}" for i in range(1, 13)], textvariable=month_var,
+            width=6, font=self.font_ui, justify="center",
+        )
+        month_box.pack(fill="x", pady=(2, 8))
+
+        tk.Label(form, text="日", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
+        day_box = tk.Spinbox(
+            form, from_=1, to=31, textvariable=day_var,
+            width=6, font=self.font_ui, justify="center",
+        )
+        day_box.pack(fill="x", pady=(2, 0))
+
+        def update_day_limit(*_):
+            try:
+                y = int(year_var.get())
+                m = int(month_var.get())
+            except ValueError:
+                return
+            max_day = calendar.monthrange(y, m)[1]
+            day_box.config(from_=1, to=max_day)
+            try:
+                d = int(day_var.get())
+                if d > max_day:
+                    day_var.set(str(max_day))
+            except ValueError:
+                day_var.set("1")
+
+        year_var.trace_add("write", update_day_limit)
+        month_var.trace_add("write", update_day_limit)
+        update_day_limit()
+
+        btn_row = tk.Frame(top, bg=self.bg)
+        btn_row.pack(fill="x", padx=16, pady=(0, 14))
+
+        def confirm():
+            try:
+                selected = date(int(year_var.get()), int(month_var.get()), int(day_var.get())).isoformat()
+            except ValueError:
+                messagebox.showerror("格式錯誤", "請選擇有效日期")
+                return
+            top.destroy()
+            if selected != self.view_date_key:
+                self._switch_view_date(selected)
+
         self._btn(btn_row, "確定", confirm, self.accent, "white").pack(side="left")
         self._btn(btn_row, "取消", top.destroy, self.bg, self.muted, border=True).pack(side="left", padx=(8, 0))
 
@@ -1438,6 +1611,7 @@ class ExamPrepApp:
                 "todo_options": list(DEFAULT_SUBJECTS),
                 "title":        "國營企管衝刺管理工具",
                 "theme":        "light",
+                "ui_scale":     100,
             },
             "todos_by_date": {},
             "notes":         [],
@@ -1460,6 +1634,7 @@ class ExamPrepApp:
         if "todos"         in loaded: self.migrate_legacy_todos(loaded["todos"])
 
         self.exam_date = self.data["settings"].get("exam_date", DEFAULT_EXAM_DATE)
+        self.ui_scale = self.data["settings"].get("ui_scale", 100)
 
     def migrate_legacy_todos(self, legacy_todos):
         today     = self.get_today_key()
@@ -1505,6 +1680,7 @@ class ExamPrepApp:
         else:
             exam_val = getattr(self, "exam_date", DEFAULT_EXAM_DATE)
         self.data["settings"]["exam_date"] = exam_val
+        self.data["settings"]["ui_scale"] = self.data["settings"].get("ui_scale", 100)
         self.data["todos_by_date"][getattr(self, "view_date_key", self.today_key)] = self.todos
         tmp = DATA_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
