@@ -21,5 +21,4 @@ exam_progress.json
 
 # PyInstaller build artifacts
 build/
-dist/
 *.spec
