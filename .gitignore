@@ -22,3 +22,6 @@ exam_progress.json
 # PyInstaller build artifacts
 build/
 *.spec
+
+# Test cache
+.pytest_cache/

@@ -1,0 +1,3 @@
+-r requirements.txt
+pyinstaller  # used to build dist/study_tracker.exe
+pytest       # used to run tests/
