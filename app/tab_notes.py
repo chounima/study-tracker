@@ -348,12 +348,22 @@ class NotesTabMixin:
         self.refresh_notes()
 
     def delete_note(self, note):
-        try:
-            self.data["notes"].remove(note)
-        except ValueError:
+        idx = self.pop_note_with_index(note)
+        if idx is None:
             return
         self.save_data()
         if getattr(self, "notes_mode", "add") == "search":
             self.search_notes()
         else:
             self.refresh_notes()
+
+        def _undo():
+            self.restore_note_at(idx, note)
+            self.save_data()
+            if getattr(self, "notes_mode", "add") == "search":
+                self.search_notes()
+            else:
+                self.refresh_notes()
+
+        label = note.get("question", note.get("subject", "錯題"))
+        self._show_undo_toast(f"已刪除「{label}」", _undo)

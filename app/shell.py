@@ -1,7 +1,16 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 
-from .config import DEFAULT_EXAM_DATE, THEMES
+from .config import (
+    DEFAULT_EXAM_DATE,
+    THEMES,
+    WINDOW_HEIGHT_RATIO,
+    WINDOW_MAX_HEIGHT,
+    WINDOW_MAX_WIDTH,
+    WINDOW_MIN_HEIGHT,
+    WINDOW_MIN_WIDTH,
+    WINDOW_WIDTH_RATIO,
+)
 
 
 class ShellMixin:
@@ -12,14 +21,26 @@ class ShellMixin:
         self.root.attributes("-topmost", True)
         self.root.resizable(True, True)
 
+        self.load_data()
+
+        # Larger ui_scale needs proportionally more room, so the floor/ceiling grow
+        # with it (they never shrink below the 100%-scale baseline).
+        scale_pct = max(60, min(200, int(self.data["settings"].get("ui_scale", 100))))
+        size_factor = max(1.0, scale_pct / 100)
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
-        window_width = min(520, screen_width - 40)
-        window_height = min(740, screen_height - 80)
+        min_width = int(WINDOW_MIN_WIDTH * size_factor)
+        min_height = int(WINDOW_MIN_HEIGHT * size_factor)
+        max_width = int(WINDOW_MAX_WIDTH * size_factor)
+        max_height = int(WINDOW_MAX_HEIGHT * size_factor)
+        window_width = min(max_width, max(min_width, int(screen_width * WINDOW_WIDTH_RATIO * size_factor)))
+        window_height = min(max_height, max(min_height, int(screen_height * WINDOW_HEIGHT_RATIO * size_factor)))
+        window_width = min(window_width, screen_width - 40)
+        window_height = min(window_height, screen_height - 80)
         x = max(0, (screen_width - window_width) // 2)
         y = max(0, (screen_height - window_height) // 2)
         self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        self.root.minsize(min(480, window_width), min(640, window_height))
+        self.root.minsize(min(min_width, window_width), min(min_height, window_height))
 
         self.drag_offset_x = 0
         self.drag_offset_y = 0
@@ -27,7 +48,6 @@ class ShellMixin:
         self.active_tab = "todo"
         self.tab_frames = {}
 
-        self.load_data()
         self.ensure_today_plan()
         self.define_colors()
         self.build_ui()
@@ -123,7 +143,8 @@ class ShellMixin:
                 bg=info["_dot"],
                 fg="white",
                 bd=0, relief="flat",
-                font=(self.font_sm[0], 8, "bold") if is_active else (self.font_sm[0], 8),
+                font=(self.font_sm[0], max(7, int(8 * self.ui_scale_factor)), "bold")
+                if is_active else (self.font_sm[0], max(7, int(8 * self.ui_scale_factor))),
                 padx=6, pady=4, cursor="hand2",
                 highlightthickness=2 if is_active else 0,
                 highlightbackground="white",

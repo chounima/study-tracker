@@ -41,7 +41,7 @@ TestApp/
     ├── tests/
     │   └── test_storage.py          ← `storage.py` 資料邏輯的單元測試（不依賴 tkinter GUI）
     ├── exam_progress.json          ← 使用者資料存檔（已 gitignore，內含個人讀書紀錄）
-    ├── requirements.txt             ← 執行期相依套件（tkcalendar，選用）
+    ├── requirements.txt             ← 執行期相依套件（tkcalendar，必要）
     ├── requirements-dev.txt          ← 開發期相依套件（pytest、pyinstaller）
     ├── README.md                   ← 本說明文件
     ├── .gitignore
@@ -70,7 +70,7 @@ python -m venv .venv
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-- `requirements.txt`：執行程式所需（目前只有 `tkcalendar`，屬選用套件；若環境中缺少，日期選擇器會自動退回內建的簡易年/月/日選擇視窗 `_open_simple_date_picker`，主流程仍可正常使用）。
+- `requirements.txt`：執行程式所需（目前只有 `tkcalendar`，為必要套件；若環境中缺少，`main()` 會彈出錯誤訊息並拒絕啟動，提示先執行 `pip install -r requirements.txt`）。
 - `requirements-dev.txt`：額外開發用（`pytest` 跑測試、`pyinstaller` 打包 exe），已內含 `-r requirements.txt`。
 
 ### 執行程式

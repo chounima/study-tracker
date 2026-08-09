@@ -31,6 +31,21 @@ class ExamPrepApp(
 
 def main():
     try:
+        import tkcalendar  # noqa: F401
+    except ModuleNotFoundError:
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "缺少必要套件",
+            "找不到 tkcalendar，請先安裝相依套件：\n\n"
+            "    pip install -r requirements.txt\n\n"
+            "安裝完成後再重新啟動程式。",
+        )
+        root.destroy()
+        return
+
+    try:
         import ctypes
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(2)

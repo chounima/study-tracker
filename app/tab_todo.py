@@ -1,4 +1,3 @@
-import calendar
 import time
 import tkinter as tk
 from datetime import datetime, date, timedelta
@@ -87,9 +86,11 @@ class TodoTabMixin:
         self.todo_start_h_var = tk.StringVar(value="08")
         self.todo_start_m_var = tk.StringVar(value="30")
         _h_vals = tuple(f"{h:02d}" for h in range(24))
-        self._mk_spin(r1, self.todo_start_h_var, _h_vals, self.card, width=3).pack(side="left")
+        start_h_spin = self._mk_spin(r1, self.todo_start_h_var, _h_vals, self.card, width=3)
+        start_h_spin.pack(side="left")
         tk.Label(r1, text=":", fg=self.text, bg=self.card, font=self.font_md).pack(side="left", padx=1)
-        self._mk_spin(r1, self.todo_start_m_var, ("00", "15", "30", "45"), self.card, width=3).pack(side="left", padx=(0, 14))
+        start_m_spin = self._mk_spin(r1, self.todo_start_m_var, ("00", "15", "30", "45"), self.card, width=3)
+        start_m_spin.pack(side="left", padx=(0, 14))
 
         def _sync_add_start(*_):
             self.todo_time_start_var.set(f"{self.todo_start_h_var.get()}:{self.todo_start_m_var.get()}")
@@ -98,9 +99,10 @@ class TodoTabMixin:
 
         tk.Label(r1, text="時數", fg=self.muted, bg=self.card, font=self.font_sm).pack(side="left", padx=(0, 6))
         self.todo_hours_var = tk.StringVar(value="1.5")
-        self._mk_spin(r1, self.todo_hours_var,
+        hours_spin = self._mk_spin(r1, self.todo_hours_var,
                       ("0.5", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"),
-                      self.card, width=4).pack(side="left", padx=(0, 10))
+                      self.card, width=4)
+        hours_spin.pack(side="left", padx=(0, 10))
 
         self.todo_end_preview = tk.Label(r1, text="→ 10:00", fg=self.accent, bg=self.card, font=self.font_sm)
         self.todo_end_preview.pack(side="left")
@@ -114,10 +116,22 @@ class TodoTabMixin:
         self.todo_combo = self._make_dropdown(r2, self._get_todo_options())
         self.todo_combo.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
+        def _submit_add_row(_=None):
+            self.add_custom_todo()
+            return "break"
+
+        def _cancel_add_row(_=None):
+            self.root.focus_set()
+            return "break"
+
+        for widget in (start_h_spin.entry, start_m_spin.entry, hours_spin.entry, self.todo_combo):
+            widget.bind("<Return>", _submit_add_row)
+            widget.bind("<Escape>", _cancel_add_row)
+
         tk.Button(
             r2, text="⚙", command=self.open_todo_options_manager,
             bg=self.card, fg=self.muted,
-            bd=0, relief="flat", font=(self.font_sm[0], 13),
+            bd=0, relief="flat", font=(self.font_sm[0], max(8, int(13 * self.ui_scale_factor))),
             padx=4, pady=4, cursor="hand2",
             highlightthickness=0,
             activebackground=self.strip_bg, activeforeground=self.accent,
@@ -157,13 +171,9 @@ class TodoTabMixin:
         self._switch_view_date(self.today_key)
 
     def _open_cal_picker(self):
-        cur = date.fromisoformat(self.view_date_key)
-        try:
-            from tkcalendar import Calendar
-        except ModuleNotFoundError:
-            self._open_simple_date_picker(cur)
-            return
+        from tkcalendar import Calendar
 
+        cur = date.fromisoformat(self.view_date_key)
         top = tk.Toplevel(self.root)
         top.title("選擇日期")
         top.resizable(False, False)
@@ -197,79 +207,6 @@ class TodoTabMixin:
                 self._switch_view_date(selected)
 
         cal.bind("<<CalendarSelected>>", lambda _: confirm())
-        self._btn(btn_row, "確定", confirm, self.accent, "white").pack(side="left")
-        self._btn(btn_row, "取消", top.destroy, self.bg, self.muted, border=True).pack(side="left", padx=(8, 0))
-
-    def _open_simple_date_picker(self, cur):
-        top = tk.Toplevel(self.root)
-        top.title("選擇日期")
-        top.resizable(False, False)
-        top.configure(bg=self.bg)
-        top.attributes("-topmost", True)
-        top.grab_set()
-        top.focus_force()
-        top.geometry(f"+{self.root.winfo_x() + 20}+{self.root.winfo_y() + 80}")
-
-        year_var = tk.StringVar(value=str(cur.year))
-        month_var = tk.StringVar(value=f"{cur.month:02d}")
-        day_var = tk.StringVar(value=f"{cur.day:02d}")
-
-        form = tk.Frame(top, bg=self.bg)
-        form.pack(padx=16, pady=(14, 8))
-
-        tk.Label(form, text="年", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
-        year_box = tk.Spinbox(
-            form, from_=2000, to=2100, textvariable=year_var,
-            width=6, font=self.font_ui, justify="center",
-        )
-        year_box.pack(fill="x", pady=(2, 8))
-
-        tk.Label(form, text="月", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
-        month_box = tk.Spinbox(
-            form, values=[f"{i:02d}" for i in range(1, 13)], textvariable=month_var,
-            width=6, font=self.font_ui, justify="center",
-        )
-        month_box.pack(fill="x", pady=(2, 8))
-
-        tk.Label(form, text="日", fg=self.muted, bg=self.bg, font=self.font_sm).pack(anchor="w")
-        day_box = tk.Spinbox(
-            form, from_=1, to=31, textvariable=day_var,
-            width=6, font=self.font_ui, justify="center",
-        )
-        day_box.pack(fill="x", pady=(2, 0))
-
-        def update_day_limit(*_):
-            try:
-                y = int(year_var.get())
-                m = int(month_var.get())
-            except ValueError:
-                return
-            max_day = calendar.monthrange(y, m)[1]
-            day_box.config(from_=1, to=max_day)
-            try:
-                d = int(day_var.get())
-                if d > max_day:
-                    day_var.set(str(max_day))
-            except ValueError:
-                day_var.set("1")
-
-        year_var.trace_add("write", update_day_limit)
-        month_var.trace_add("write", update_day_limit)
-        update_day_limit()
-
-        btn_row = tk.Frame(top, bg=self.bg)
-        btn_row.pack(fill="x", padx=16, pady=(0, 14))
-
-        def confirm():
-            try:
-                selected = date(int(year_var.get()), int(month_var.get()), int(day_var.get())).isoformat()
-            except ValueError:
-                messagebox.showerror("格式錯誤", "請選擇有效日期")
-                return
-            top.destroy()
-            if selected != self.view_date_key:
-                self._switch_view_date(selected)
-
         self._btn(btn_row, "確定", confirm, self.accent, "white").pack(side="left")
         self._btn(btn_row, "取消", top.destroy, self.bg, self.muted, border=True).pack(side="left", padx=(8, 0))
 
@@ -507,12 +444,13 @@ class TodoTabMixin:
             self.render_todos()
             self.refresh_study_chart()
 
-        def cancel_edit():
+        def cancel_edit(_=None):
             self._editing_todo_id = None
             self.render_todos()
+            return "break"
 
         txt_entry.bind("<Return>", lambda _: save_edit())
-        txt_entry.bind("<Escape>", lambda _: cancel_edit())
+        txt_entry.bind("<Escape>", cancel_edit)
 
         tk.Button(
             r3, text="儲存", command=save_edit,
@@ -564,12 +502,13 @@ class TodoTabMixin:
             self.save_data()
             self.render_todos()
 
-        def cancel_note():
+        def cancel_note(_=None):
             self._noting_todo_id = None
             self.render_todos()
+            return "break"
 
         note_entry.bind("<Return>", lambda _: save_note())
-        note_entry.bind("<Escape>", lambda _: cancel_note())
+        note_entry.bind("<Escape>", cancel_note)
 
         for sym, fg_c, hover, cmd in [
             ("✔", self.success, self.success, save_note),
@@ -586,15 +525,28 @@ class TodoTabMixin:
         note_entry.focus_set()
 
     def _delete_todo(self, item):
-        try:
-            self.todos.remove(item)
-        except ValueError:
+        date_key = self.view_date_key
+        todos_list = self.todos
+        idx = self.pop_todo_with_index(item, todos_list)
+        if idx is None:
             return
         self._editing_todo_id = None
         self.save_data()
         self.render_todos()
         self.refresh_stats()
         self.refresh_study_chart()
+
+        def _undo():
+            # 用刪除當下記住的清單物件還原，避免使用者在 5 秒內切換日期後
+            # 誤把項目還原到目前正在檢視、但並非原本所屬的日期。
+            self.restore_todo_at(idx, item, todos_list)
+            self.save_data()
+            if self.view_date_key == date_key:
+                self.render_todos()
+            self.refresh_stats()
+            self.refresh_study_chart()
+
+        self._show_undo_toast(f"已刪除「{item.get('text', '待辦事項')}」", _undo)
 
     def _infer_section(self, time_start: str) -> str:
         try:

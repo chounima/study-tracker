@@ -1,1 +1,1 @@
-tkcalendar  # optional: native calendar picker; app falls back to a built-in simple date picker if missing
+tkcalendar  # required: 日期選擇器，缺少時 main() 會顯示錯誤訊息並拒絕啟動

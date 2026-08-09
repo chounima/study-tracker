@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import font as tkfont
 
 
 class WidgetHelpersMixin:
@@ -56,7 +57,7 @@ class WidgetHelpersMixin:
         disp.pack(side="left", fill="x", expand=True)
 
         arrow = tk.Label(outer, text="▾", bg=self.input_bg, fg=self.muted,
-                         font=(self.font_sm[0], 11), padx=8, cursor="hand2")
+                         font=(self.font_sm[0], max(8, int(11 * self.ui_scale_factor))), padx=8, cursor="hand2")
         arrow.pack(side="right")
 
         def _open():
@@ -72,21 +73,47 @@ class WidgetHelpersMixin:
 
             outer.update_idletasks()
             pw = max(outer.winfo_width(), 120)
+            margin = 8
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+
+            # Size the popup to fit every item unless that would run off the screen —
+            # only then does it shrink to the available space and gain a scrollbar.
+            row_h = tkfont.Font(font=self.font_ui).metrics("linespace") + 6
+            content_h = len(vals) * row_h + 6
+
+            anchor_top = outer.winfo_rooty()
+            below_y = anchor_top + outer.winfo_height()
+            space_below = screen_h - margin - below_y
+            space_above = anchor_top - margin
+            if content_h <= space_below or space_below >= space_above:
+                py = below_y
+                ph = min(content_h, max(row_h, space_below))
+            else:
+                ph = min(content_h, max(row_h, space_above))
+                py = anchor_top - ph
+
             px = outer.winfo_rootx()
-            py = outer.winfo_rooty() + outer.winfo_height()
-            ph = min(len(vals) * 28 + 6, 220)
-            popup.geometry(f"{pw}x{ph}+{px}+{py}")
+            px = max(margin, min(px, screen_w - pw - margin))
+            popup.geometry(f"{pw}x{int(ph)}+{int(px)}+{int(py)}")
 
             card = tk.Frame(popup, bg=self.card, bd=1, relief="solid")
             card.pack(fill="both", expand=True)
 
+            list_wrap = tk.Frame(card, bg=self.card)
+            list_wrap.pack(fill="both", expand=True, padx=2, pady=2)
+
             lb = tk.Listbox(
-                card, font=self.font_ui,
+                list_wrap, font=self.font_ui,
                 bg=self.card, fg=self.text,
                 selectbackground=self.accent, selectforeground="white",
                 activestyle="none", relief="flat", bd=0, highlightthickness=0,
             )
-            lb.pack(fill="both", expand=True, padx=2, pady=2)
+            if content_h > ph + 1:
+                sb = tk.Scrollbar(list_wrap, orient="vertical", command=lb.yview)
+                lb.configure(yscrollcommand=sb.set)
+                sb.pack(side="right", fill="y")
+            lb.pack(side="left", fill="both", expand=True)
 
             for v in vals:
                 lb.insert("end", v)
@@ -136,10 +163,55 @@ class WidgetHelpersMixin:
 
         return outer
 
+    # ── undo toast ────────────────────────────────────────────────────────────
+    def _show_undo_toast(self, message, on_undo):
+        self._dismiss_undo_toast()
+
+        toast = tk.Frame(self.root, bg=self.text, bd=0)
+
+        tk.Label(
+            toast, text=message, fg=self.bg, bg=self.text,
+            font=self.font_sm, padx=14, pady=10,
+        ).pack(side="left")
+
+        def _undo_clicked():
+            self._dismiss_undo_toast()
+            on_undo()
+
+        tk.Button(
+            toast, text="復原", command=_undo_clicked,
+            bg=self.text, fg=self.accent_lt,
+            bd=0, relief="flat", font=(self.font_sm[0], self.font_sm[1], "bold"),
+            padx=14, pady=10, cursor="hand2",
+            highlightthickness=0,
+            activebackground=self.text, activeforeground=self.accent_lt,
+        ).pack(side="left")
+
+        toast.place(relx=0.5, rely=1.0, anchor="s", y=-14)
+        self._undo_toast     = toast
+        self._undo_after_id  = self.root.after(5000, self._dismiss_undo_toast)
+
+    def _dismiss_undo_toast(self):
+        after_id = getattr(self, "_undo_after_id", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except Exception:
+                pass
+        toast = getattr(self, "_undo_toast", None)
+        if toast is not None:
+            try:
+                toast.destroy()
+            except Exception:
+                pass
+        self._undo_toast    = None
+        self._undo_after_id = None
+
     # ── custom spin widget ────────────────────────────────────────────────────
     def _mk_spin(self, parent, var, values, bg, width=4):
         vals  = list(values)
         frame = tk.Frame(parent, bg=bg)
+        frame.entry = None
 
         def step(delta):
             cur = var.get().strip()
@@ -151,13 +223,15 @@ class WidgetHelpersMixin:
 
         for text, d in [("−", -1), (None, None), ("＋", 1)]:
             if text is None:
-                tk.Entry(
+                entry = tk.Entry(
                     frame, textvariable=var, width=width,
                     font=self.font_md, bd=0, relief="flat",
                     highlightthickness=1, highlightcolor=self.accent, highlightbackground=self.border,
                     bg=self.input_bg, fg=self.text, insertbackground=self.text,
                     justify="center",
-                ).pack(side="left", padx=1)
+                )
+                entry.pack(side="left", padx=1)
+                frame.entry = entry
             else:
                 tk.Button(
                     frame, text=text, command=lambda d=d: step(d),

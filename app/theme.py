@@ -27,6 +27,7 @@ class ThemeMixin:
         scale = self.data.get("settings", {}).get("ui_scale", 100)
         scale = max(60, min(200, int(scale)))
         factor = scale / 100
+        self.ui_scale_factor = factor
         self.font_ui  = ("Microsoft JhengHei UI", max(8, int(10 * factor)))
         self.font_sm  = ("Microsoft JhengHei UI", max(8, int(9 * factor)))
         self.font_md  = ("Microsoft JhengHei UI", max(8, int(11 * factor)))
@@ -34,7 +35,13 @@ class ThemeMixin:
         self.font_xl  = ("Microsoft JhengHei UI", max(16, int(24 * factor)), "bold")
         self.root.option_add("*Font", self.font_ui)
         try:
-            self.root.tk.call("tk", "scaling", factor)
+            # Capture Tk's own DPI-derived scaling once, before we ever override it, so
+            # ui_scale multiplies on top of the real per-monitor DPI instead of replacing
+            # it outright (replacing it flattened every machine to the same fixed size
+            # regardless of actual screen DPI).
+            if not hasattr(self, "_base_tk_scaling"):
+                self._base_tk_scaling = self.root.tk.call("tk", "scaling")
+            self.root.tk.call("tk", "scaling", self._base_tk_scaling * factor)
         except Exception:
             pass
 

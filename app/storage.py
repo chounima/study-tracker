@@ -100,6 +100,36 @@ class DataMixin:
         if hasattr(self, "status_label"):
             self.status_label.config(text=f"已儲存 {datetime.now().strftime('%H:%M:%S')}")
 
+    def pop_todo_with_index(self, item, todos=None):
+        """從指定的 todos 清單（預設 self.todos）移除 item，回傳其原始 index；找不到回傳 None。"""
+        if todos is None:
+            todos = self.todos
+        try:
+            idx = todos.index(item)
+        except ValueError:
+            return None
+        todos.pop(idx)
+        return idx
+
+    def restore_todo_at(self, idx, item, todos=None):
+        """把 item 塞回指定 todos 清單（預設 self.todos）的原始位置（若清單已變短則夾到結尾）。"""
+        if todos is None:
+            todos = self.todos
+        pos = min(idx, len(todos))
+        todos.insert(pos, item)
+
+    def pop_note_with_index(self, note):
+        try:
+            idx = self.data["notes"].index(note)
+        except ValueError:
+            return None
+        self.data["notes"].pop(idx)
+        return idx
+
+    def restore_note_at(self, idx, note):
+        pos = min(idx, len(self.data["notes"]))
+        self.data["notes"].insert(pos, note)
+
     def ensure_today_plan(self):
         self.today_key = self.get_today_key()
         if not hasattr(self, "view_date_key") or self.view_date_key is None:

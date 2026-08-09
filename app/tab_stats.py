@@ -1,5 +1,6 @@
 import tkinter as tk
 from datetime import datetime, date
+from tkinter import ttk
 
 
 class StatsTabMixin:
@@ -64,25 +65,35 @@ class StatsTabMixin:
         )
         self.detail_date_lbl.pack(anchor="w", padx=10, pady=6)
 
-        _dc_outer = tk.Frame(detail_card, bg=self.card)
-        _dc_outer.pack(fill="both", expand=True)
-        self.detail_canvas = tk.Canvas(_dc_outer, bg=self.card, bd=0, highlightthickness=0)
-        _dc_sb = tk.Scrollbar(_dc_outer, orient="vertical", command=self.detail_canvas.yview)
-        self.detail_canvas.configure(yscrollcommand=_dc_sb.set)
-        _dc_sb.pack(side="right", fill="y")
-        self.detail_canvas.pack(side="left", fill="both", expand=True)
+        tree_outer = tk.Frame(detail_card, bg=self.card)
+        tree_outer.pack(fill="both", expand=True)
 
-        self.detail_items_frame = tk.Frame(self.detail_canvas, bg=self.card)
-        self._dc_win = self.detail_canvas.create_window(
-            (0, 0), window=self.detail_items_frame, anchor="nw")
-        self.detail_items_frame.bind("<Configure>", lambda e: self.detail_canvas.configure(
-            scrollregion=self.detail_canvas.bbox("all")))
-        self.detail_canvas.bind("<Configure>", lambda e: self.detail_canvas.itemconfig(
-            self._dc_win, width=e.width))
-        self.detail_canvas.bind("<Enter>", lambda e: self.root.bind_all(
-            "<MouseWheel>",
-            lambda ev: self.detail_canvas.yview_scroll(-1 * (ev.delta // 120), "units")))
-        self.detail_canvas.bind("<Leave>", lambda e: self.root.unbind_all("<MouseWheel>"))
+        style_name = self._build_detail_tree_style()
+        columns = ("date", "weekday", "time", "item", "done", "hours", "note")
+        headers = {
+            "date": "日期", "weekday": "星期", "time": "時間", "item": "項目",
+            "done": "完成", "hours": "時數", "note": "備註",
+        }
+        widths  = {"date": 88, "weekday": 44, "time": 96, "item": 110, "done": 44, "hours": 52, "note": 160}
+        anchors = {"done": "center", "hours": "e"}
+
+        self.detail_tree = ttk.Treeview(
+            tree_outer, columns=columns, show="headings",
+            style=style_name, selectmode="browse",
+        )
+        for col in columns:
+            self.detail_tree.heading(col, text=headers[col],
+                                      command=lambda c=col: self._sort_detail_tree(c))
+            self.detail_tree.column(col, width=widths[col], minwidth=widths[col],
+                                     anchor=anchors.get(col, "w"), stretch=(col in ("item", "note")))
+        self.detail_tree.tag_configure("done", foreground=self.done_fg)
+        self.detail_tree.tag_configure("today", background=self.strip_bg)
+        self._detail_sort = (None, False)
+
+        tree_sb = ttk.Scrollbar(tree_outer, orient="vertical", command=self.detail_tree.yview)
+        self.detail_tree.configure(yscrollcommand=tree_sb.set)
+        tree_sb.pack(side="right", fill="y")
+        self.detail_tree.pack(side="left", fill="both", expand=True)
 
         self.detail_summary_lbl = tk.Label(
             detail_card, text="", fg=self.muted, bg=self.card,
@@ -91,6 +102,55 @@ class StatsTabMixin:
         self.detail_summary_lbl.pack(fill="x")
 
         self.switch_stats_mode("chart")
+
+    def _build_detail_tree_style(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(
+            "Detail.Treeview",
+            background=self.card, fieldbackground=self.card,
+            foreground=self.text, rowheight=24,
+            borderwidth=0, font=self.font_sm,
+        )
+        style.map(
+            "Detail.Treeview",
+            background=[("selected", self.accent)],
+            foreground=[("selected", "white")],
+        )
+        style.configure(
+            "Detail.Treeview.Heading",
+            background=self.strip_bg, foreground=self.muted,
+            font=(self.font_sm[0], self.font_sm[1], "bold"), relief="flat",
+        )
+        style.map("Detail.Treeview.Heading", background=[("active", self.border)])
+        return "Detail.Treeview"
+
+    def _sort_detail_tree(self, col):
+        prev_col, prev_reverse = self._detail_sort
+        reverse = (prev_col == col and not prev_reverse)
+
+        def keyfunc(iid):
+            val = self.detail_tree.set(iid, col)
+            if col == "hours":
+                try:
+                    return float(val.rstrip("h"))
+                except ValueError:
+                    return -1.0
+            if col == "date":
+                try:
+                    y, m, d = val.split("/")
+                    return (int(y), int(m), int(d))
+                except ValueError:
+                    return val
+            return val
+
+        items = sorted(self.detail_tree.get_children(""), key=keyfunc, reverse=reverse)
+        for idx, iid in enumerate(items):
+            self.detail_tree.move(iid, "", idx)
+        self._detail_sort = (col, reverse)
 
     def switch_stats_mode(self, mode):
         self.stats_mode = mode
@@ -120,7 +180,7 @@ class StatsTabMixin:
         tk.Frame(c, bg=accent, height=3).pack(fill="x")
         tk.Label(c, text=title, fg=self.muted, bg=self.card, font=self.font_sm).pack(pady=(10, 4))
         lbl = tk.Label(c, text="--", fg=accent, bg=self.card,
-                       font=("Microsoft JhengHei UI", 22, "bold"))
+                       font=("Microsoft JhengHei UI", max(16, int(22 * self.ui_scale_factor)), "bold"))
         lbl.pack(pady=(0, 12))
         return lbl
 
@@ -151,17 +211,15 @@ class StatsTabMixin:
         self.refresh_stats_detail()
 
     def refresh_stats_detail(self):
-        if not hasattr(self, "detail_items_frame"):
+        if not hasattr(self, "detail_tree"):
             return
-        for child in self.detail_items_frame.winfo_children():
-            child.destroy()
+        self.detail_tree.delete(*self.detail_tree.get_children())
+        self._detail_sort = (None, False)
 
         all_dates = sorted(
             (k for k, v in self.data["todos_by_date"].items() if v), reverse=True)
 
         if not all_dates:
-            tk.Label(self.detail_items_frame, text="（尚無任何待辦記錄）",
-                     fg=self.muted, bg=self.card, font=self.font_sm).pack(pady=12)
             self.detail_summary_lbl.config(text="")
             self.detail_date_lbl.config(text="全部日期")
             return
@@ -175,22 +233,10 @@ class StatsTabMixin:
             try:
                 d        = date.fromisoformat(date_key)
                 is_today = (date_key == self.today_key)
-                dlabel   = f"{d.year}/{d.month:02d}/{d.day:02d}（週{wdays[d.weekday()]}）"
-                if is_today:
-                    dlabel += "  ◀ 今日"
+                dlabel   = f"{d.year}/{d.month:02d}/{d.day:02d}"
+                wlabel   = f"週{wdays[d.weekday()]}"
             except ValueError:
-                dlabel   = date_key
-                is_today = False
-
-            date_hdr = tk.Frame(self.detail_items_frame, bg=self.strip_bg)
-            date_hdr.pack(fill="x", pady=(4, 0))
-            tk.Label(
-                date_hdr, text=dlabel,
-                fg=self.accent if is_today else self.muted,
-                bg=self.strip_bg,
-                font=(self.font_sm[0], self.font_sm[1], "bold"),
-                padx=8, pady=4,
-            ).pack(side="left")
+                dlabel, wlabel, is_today = date_key, "", False
 
             for item in items:
                 is_done = item.get("done", False)
@@ -210,41 +256,27 @@ class StatsTabMixin:
                     done_h += hours
                     done_n += 1
 
-                row = tk.Frame(self.detail_items_frame, bg=self.card)
-                row.pack(fill="x", padx=8, pady=(2, 0))
-                tk.Label(row,
-                         text="✓" if is_done else "◦",
-                         fg=self.success if is_done else self.done_fg,
-                         bg=self.card,
-                         font=(self.font_sm[0], self.font_sm[1], "bold"), width=2).pack(side="left")
-                tk.Label(row,
-                         text=f"{ts}–{te}" if ts and te else "―",
-                         fg=self.muted if not is_done else self.done_fg,
-                         bg=self.card, font=self.font_sm, width=13, anchor="w").pack(side="left", padx=(2, 6))
-                tk.Label(row, text=item.get("text", ""),
-                         fg=self.done_fg if is_done else self.text,
-                         bg=self.card, font=self.font_ui, anchor="w").pack(side="left", fill="x", expand=True)
-                if hours > 0:
-                    tk.Label(row, text=f"{hours:.1f}h",
-                             fg=self.success if is_done else self.muted,
-                             bg=self.card, font=self.font_sm, width=5, anchor="e").pack(side="right", padx=(0, 6))
-                if note:
-                    nr = tk.Frame(self.detail_items_frame, bg=self.card)
-                    nr.pack(fill="x", padx=(28, 12), pady=(0, 2))
-                    tk.Label(nr, text=note, fg=self.muted, bg=self.card,
-                             font=self.font_sm, anchor="w", wraplength=340, justify="left").pack(side="left")
+                tags = []
+                if is_done:
+                    tags.append("done")
+                if is_today:
+                    tags.append("today")
 
-        tk.Frame(self.detail_items_frame, bg=self.border, height=1).pack(fill="x", padx=8, pady=(6, 0))
+                self.detail_tree.insert("", "end", values=(
+                    dlabel, wlabel,
+                    f"{ts}–{te}" if ts and te else "―",
+                    item.get("text", ""),
+                    "✓" if is_done else "",
+                    f"{hours:.1f}h" if hours > 0 else "",
+                    note,
+                ), tags=tuple(tags))
+
         parts = []
         if total_h > 0: parts.append(f"完成 {done_h:.1f}h / 共 {total_h:.1f}h")
         if total_n > 0: parts.append(f"事項 {done_n}/{total_n}")
         parts.append(f"共 {len(all_dates)} 天有記錄")
         self.detail_summary_lbl.config(text="   ".join(parts))
         self.detail_date_lbl.config(text=f"全部記錄 ({len(all_dates)} 日)")
-
-        if hasattr(self, "detail_canvas"):
-            self.detail_canvas.update_idletasks()
-            self.detail_canvas.configure(scrollregion=self.detail_canvas.bbox("all"))
 
     def refresh_study_chart(self):
         if not hasattr(self, "study_chart_canvas"):

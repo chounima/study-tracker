@@ -13,6 +13,14 @@ DEFAULT_PLAN = [
 DEFAULT_SUBJECTS = ["企業管理", "經濟學", "法學", "國英", "歷屆題"]
 SECTION_COLORS = {"上午": "#f59e0b", "下午": "#3b82f6", "晚上": "#8b5cf6", "今日": "#10b981"}
 
+# 預設視窗大小：依螢幕解析度的比例計算，並用 MIN/MAX 夾住，避免小螢幕太擠、大螢幕太空。
+WINDOW_WIDTH_RATIO = 0.40
+WINDOW_HEIGHT_RATIO = 0.85
+WINDOW_MIN_WIDTH = 640
+WINDOW_MIN_HEIGHT = 640
+WINDOW_MAX_WIDTH = 820
+WINDOW_MAX_HEIGHT = 1080
+
 THEMES = {
     "light": {
         "bg": "#f1f5f9", "titlebar_bg": "#0f172a", "strip_bg": "#e2e8f0",

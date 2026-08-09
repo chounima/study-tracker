@@ -111,6 +111,98 @@ def test_ensure_today_plan_seeds_default_plan_for_empty_today(app):
     assert {t["text"] for t in app.todos} == {p["subject"] for p in DEFAULT_PLAN}
 
 
+def test_pop_todo_with_index_removes_item_and_returns_index(app):
+    app.todos = [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+    item = app.todos[1]
+
+    idx = app.pop_todo_with_index(item)
+
+    assert idx == 1
+    assert item not in app.todos
+    assert [t["id"] for t in app.todos] == ["1", "3"]
+
+
+def test_pop_todo_with_index_returns_none_when_item_missing(app):
+    app.todos = [{"id": "1"}, {"id": "2"}]
+    missing = {"id": "not-there"}
+
+    idx = app.pop_todo_with_index(missing)
+
+    assert idx is None
+    assert [t["id"] for t in app.todos] == ["1", "2"]
+
+
+def test_restore_todo_at_reinserts_at_original_position(app):
+    original = [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+    app.todos = list(original)
+    item = app.todos[1]
+
+    idx = app.pop_todo_with_index(item)
+    app.restore_todo_at(idx, item)
+
+    assert app.todos == original
+
+
+def test_restore_todo_at_clamps_when_list_shorter_than_index(app):
+    app.todos = [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+    item = app.todos[2]
+    idx = app.pop_todo_with_index(item)
+
+    # simulate the list shrinking further before the undo happens
+    app.todos.pop()
+
+    app.restore_todo_at(idx, item)
+
+    assert app.todos[-1] == item
+    assert len(app.todos) == 2
+
+
+def test_pop_note_with_index_removes_item_and_returns_index(app):
+    app.data = {"notes": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}
+    note = app.data["notes"][1]
+
+    idx = app.pop_note_with_index(note)
+
+    assert idx == 1
+    assert note not in app.data["notes"]
+    assert [n["id"] for n in app.data["notes"]] == ["1", "3"]
+
+
+def test_pop_note_with_index_returns_none_when_item_missing(app):
+    app.data = {"notes": [{"id": "1"}, {"id": "2"}]}
+    missing = {"id": "not-there"}
+
+    idx = app.pop_note_with_index(missing)
+
+    assert idx is None
+    assert [n["id"] for n in app.data["notes"]] == ["1", "2"]
+
+
+def test_restore_note_at_reinserts_at_original_position(app):
+    original = [{"id": "1"}, {"id": "2"}, {"id": "3"}]
+    app.data = {"notes": list(original)}
+    note = app.data["notes"][1]
+
+    idx = app.pop_note_with_index(note)
+    app.restore_note_at(idx, note)
+
+    assert app.data["notes"] == original
+
+
+def test_restore_note_at_clamps_when_list_shorter_than_index(app):
+    app.data = {"notes": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}
+    note = app.data["notes"][2]
+    idx = app.pop_note_with_index(note)
+
+    # simulate the list shrinking further before the undo happens
+    app.data["notes"].pop()
+
+    app.restore_note_at(idx, note)
+
+    assert app.data["notes"][-1] == note
+    assert len(app.data["notes"]) == 2
+
+
 def test_save_data_roundtrips_through_disk(app):
     app.load_data()
     app.ensure_today_plan()
