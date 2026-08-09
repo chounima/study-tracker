@@ -1,0 +1,25 @@
+[project]
+name = "study-tracker-flet"
+version = "0.1.0"
+description = "國營企管衝刺管理工具 — cross-platform Flet edition (Windows/macOS/Linux/Android/iOS/Web)"
+readme = "README-flet.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flet>=0.86.5"
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli>=0.86.5",
+    "flet-desktop>=0.86.5",
+    "flet-web>=0.86.5",
+]
+
+[tool.flet]
+org = "com.studytracker"
+product = "study-tracker"
+company = "study-tracker"
+copyright = "Copyright (C) 2026"
+
+[tool.flet.app]
+path = "flet_app"
